@@ -8,6 +8,16 @@ function ConvertObjectTo-HTMLTable {
             It will create the table with all unique properties passed, leaving empty ones blank.
         .PARAMETER object
             Any object
+        .PARAMETER tagdata
+            An object with extra data to be added to the HTML tags used, such as styling data.
+            Accepted tags:
+                - table   : styling for the entire table
+                - thead   : styling for the thead
+                - theadtr : styling for the tr in thead
+                - theadtd : styling for the td's in thead
+                - tbody   : styling for the tbody
+                - tbodytr : styling for the tr's in tbody
+                - tbodytd : styling for the td's in tbody
         .EXAMPLE
             ConvertObjectTo-HTMLTable -object $foobar
 
@@ -42,7 +52,10 @@ function ConvertObjectTo-HTMLTable {
     Param(
         [Parameter(Mandatory=$True)]
         [ValidateNotNullOrEmpty()]
-        [psobject[]]$object
+        [psobject[]]$object,
+
+        [ValidateNotNullorEmpty()]
+        [psobject]$tagdata
     )
 
     PROCESS {
@@ -56,27 +69,7 @@ function ConvertObjectTo-HTMLTable {
             }
         }
 
-        $table = "<table>`n"
-        $table += "`t<thead>`n"
-        $table += "`t`t<tr>`n"
-        foreach($key in $keylist){
-            $table += "`t`t`t<td>$key</td>`n"
-        }
-        $table += "`t`t</tr>`n"
-        $table += "`t</thead>`n"
-
-        $table += "`t<tbody>`n"
-        $object | %{
-            $table += "`t`t<tr>`n"
-            foreach($key in $keylist){
-                $table += "`t`t`t<td>$($_.$key)</td>`n"
-            }
-            $table += "`t`t</tr>`n"
-        }
-        $table += "`t</tbody>`n"
-        $table += "</table>`n"
-
-        return $table
+        return ObjectTo-Table -object $object -keys $keylist -tagdata $tagdata
     }
 }
 
@@ -90,6 +83,16 @@ function ConvertObjectTo-HTMLTableOrdered {
             Any object
         .PARAMETER parameters
             An array of the properties to be included in the table in the order you want
+        .PARAMETER tagdata
+            An object with extra data to be added to the HTML tags used, such as styling data.
+            Accepted tags:
+                - table   : styling for the entire table
+                - thead   : styling for the thead
+                - theadtr : styling for the tr in thead
+                - theadtd : styling for the td's in thead
+                - tbody   : styling for the tbody
+                - tbodytr : styling for the tr's in tbody
+                - tbodytd : styling for the td's in tbody
         .EXAMPLE
             ConvertObjectTo-HTMLTableOrdered -object $foobar -parameters $params
 
@@ -128,24 +131,47 @@ function ConvertObjectTo-HTMLTableOrdered {
 
         [Parameter(Mandatory=$True)]
         [ValidateNotNullOrEmpty()]
-        [string[]]$parameters
+        [string[]]$parameters,
+
+        [ValidateNotNullorEmpty()]
+        [psobject]$tagdata
     )
 
     PROCESS {
-        $table = "<table>`n"
-        $table += "`t<thead>`n"
-        $table += "`t`t<tr>`n"
+        return ObjectTo-Table -object $object -keys $parameters -tagdata $tagdata
+    }
+}
+
+function ObjectTo-Table {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$True)]
+        [ValidateNotNullOrEmpty()]
+        [psobject[]]$object,
+
+        [Parameter(Mandatory=$True)]
+        [ValidateNotNullOrEmpty()]
+        [string[]]$keys,
+
+        [ValidateNotNullorEmpty()]
+        [psobject]$tagdata
+    )
+
+    PROCESS {
+        $table = "<table $($tagdata.table)>`n"
+        $table += "`t<thead $($tagdata.thead)>`n"
+        $table += "`t`t<tr $($tagdata.theadtr)>`n"
         foreach($parameter in $parameters){
-            $table += "`t`t`t<td>$parameter</td>`n"
+            $table += "`t`t`t<td $($tagdata.theadtd)>$parameter</td>`n"
         }
         $table += "`t`t</tr>`n"
         $table += "`t</thead>`n"
 
-        $table += "`t<tbody>`n"
+        $table += "`t<tbody $($tagdata.tbody)>`n"
         $object | %{
-            $table += "`t`t<tr>`n"
+            $table += "`t`t<tr $($tagdata.tbodytr)>`n"
             foreach($parameter in $parameters){
-                $table += "`t`t`t<td>$($_.$parameter)</td>`n"
+                $table += "`t`t`t<td $($tagdata.tbodytd)>$($_.$parameter)</td>`n"
             }
             $table += "`t`t</tr>`n"
         }
@@ -155,3 +181,5 @@ function ConvertObjectTo-HTMLTableOrdered {
         return $table
     }
 }
+
+Export-ModuleMember -Function ConvertObjectTo-HTMLTable, ConvertObjectTo-HTMLTableOrdered
