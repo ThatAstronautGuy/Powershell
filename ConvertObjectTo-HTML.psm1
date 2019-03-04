@@ -1,3 +1,10 @@
+$defaulttagdata = new-object psobject
+$defaulttagdata | add-member -MemberType NoteProperty -Name table -value "style='table-layout: fixed; border-collapse: collapse; box-shadow: 0 10px 6px -6px #777;'"
+$defaulttagdata | add-member -MemberType NoteProperty -Name theadtr -Value "style='background: #A9A9A9;'"
+$defaulttagdata | add-member -MemberType NoteProperty -Name tbodytr -Value "style='background: #D3D3D3;'"
+$defaulttagdata | Add-Member -MemberType NoteProperty -name theadtd -value "style='border: 1px solid #000000;'"
+$defaulttagdata | Add-Member -MemberType NoteProperty -name tbodytd -value "style='border: 1px solid #000000;'"
+
 function ConvertObjectTo-HTMLTable {
     <#
         .SYNOPSIS
@@ -18,6 +25,8 @@ function ConvertObjectTo-HTMLTable {
                 - tbody   : styling for the tbody
                 - tbodytr : styling for the tr's in tbody
                 - tbodytd : styling for the td's in tbody
+        .PARAMETER defaultstyle
+            If set, the default styling will be used. Note that this will override any passed tagdata.
         .EXAMPLE
             ConvertObjectTo-HTMLTable -object $foobar
 
@@ -55,7 +64,9 @@ function ConvertObjectTo-HTMLTable {
         [psobject[]]$object,
 
         [ValidateNotNullorEmpty()]
-        [psobject]$tagdata
+        [psobject]$tagdata,
+
+        [switch]$defaultstyle
     )
 
     PROCESS {
@@ -67,6 +78,10 @@ function ConvertObjectTo-HTMLTable {
                     $keylist += $key.Name
                 }
             }
+        }
+
+        if($defaultstyle){
+            $tagdata = $defaulttagdata
         }
 
         return ObjectTo-Table -object $object -keys $keylist -tagdata $tagdata
@@ -93,6 +108,8 @@ function ConvertObjectTo-HTMLTableOrdered {
                 - tbody   : styling for the tbody
                 - tbodytr : styling for the tr's in tbody
                 - tbodytd : styling for the td's in tbody
+        .PARAMETER defaultstyle
+            If set, the default styling will be used. Note that this will override any passed tagdata.
         .EXAMPLE
             ConvertObjectTo-HTMLTableOrdered -object $foobar -parameters $params
 
@@ -134,10 +151,17 @@ function ConvertObjectTo-HTMLTableOrdered {
         [string[]]$parameters,
 
         [ValidateNotNullorEmpty()]
-        [psobject]$tagdata
+        [psobject]$tagdata,
+
+        [switch]$defaultstyle
     )
 
     PROCESS {
+
+        if($defaultstyle){
+            $tagdata = $defaulttagdata
+        }
+        
         return ObjectTo-Table -object $object -keys $parameters -tagdata $tagdata
     }
 }
@@ -153,7 +177,7 @@ function ObjectTo-Table {
         [ValidateNotNullOrEmpty()]
         [string[]]$keys,
 
-        [ValidateNotNullorEmpty()]
+        #[ValidateNotNullorEmpty()]
         [psobject]$tagdata
     )
 
@@ -161,7 +185,7 @@ function ObjectTo-Table {
         $table = "<table $($tagdata.table)>`n"
         $table += "`t<thead $($tagdata.thead)>`n"
         $table += "`t`t<tr $($tagdata.theadtr)>`n"
-        foreach($parameter in $parameters){
+        foreach($parameter in $keys){
             $table += "`t`t`t<td $($tagdata.theadtd)>$parameter</td>`n"
         }
         $table += "`t`t</tr>`n"
@@ -170,7 +194,7 @@ function ObjectTo-Table {
         $table += "`t<tbody $($tagdata.tbody)>`n"
         $object | %{
             $table += "`t`t<tr $($tagdata.tbodytr)>`n"
-            foreach($parameter in $parameters){
+            foreach($parameter in $keys){
                 $table += "`t`t`t<td $($tagdata.tbodytd)>$($_.$parameter)</td>`n"
             }
             $table += "`t`t</tr>`n"
