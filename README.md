@@ -1,4 +1,4 @@
-This is a collection of powershell modules and scripts that I've made for various reasons. They should work fine, but who knows for sure. 
+This is a collection of powershell modules and scripts that I've made for various reasons. They should work fine, but who knows for sure. Feel free to submit a PR or feature request, and I'll take a look at it! 
 
 |Script|Description|
 |---|---|
