@@ -33,35 +33,46 @@ function Validate-DNS {
     )
 
     PROCESS {
+        $objarray = @()
         foreach($Computer in $Hostnames){
             if(Test-Connection -ComputerName $computer -Count 1 -Quiet){
-                $Networks = Get-WmiObject Win32_NetworkAdapterConfiguration -ComputerName $Computer -EA Stop | ? {$_.IPEnabled}
+                try{
+                    $Networks = Get-WmiObject Win32_NetworkAdapterConfiguration -ComputerName $Computer -EA Stop | ? {$_.IPEnabled}
                 
-                foreach($Network in $Networks){
-                    $DNSServers = $Network.DNSServerSearchOrder
-                    if($DNSServers[0] -eq $PrimaryDNS -and $DNSServers[1] -eq $SecondaryDNS){
-                        $valid = $true
-                    }
-                    else{
-                        $valid = $false
-                    }
+                    foreach($Network in $Networks){
+                        $DNSServers = $Network.DNSServerSearchOrder
+                        if($DNSServers[0] -eq $PrimaryDNS -and $DNSServers[1] -eq $SecondaryDNS){
+                            $valid = "True"
+                        }
+                        else{
+                            $valid = "False"
+                        }
 
+                        $Output = New-Object -Type PSObject
+                        $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                        $Output | Add-Member -MemberType NoteProperty -Name PrimaryDNS -Value $DNSServers[0]
+                        $Output | Add-Member -MemberType NoteProperty -Name SecondaryDNS -Value $DNSServers[1]
+                        $Output | Add-Member -MemberType NoteProperty -Name Correct -Value $valid
+                        $objarray += $Output
+                    }
+                }
+                catch{
+                    Write-Error -Message "WMI error connecting to $computer" -Category ConnectionError -TargetObject $computer
                     $Output = New-Object -Type PSObject
                     $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
-                    $Output | Add-Member -MemberType NoteProperty -Name PrimaryDNS -Value $DNSServers[0]
-                    $Output | Add-Member -MemberType NoteProperty -Name SecondaryDNS -Value $DNSServers[1]
-                    $Output | Add-Member -MemberType NoteProperty -Name Correct -Value $valid
-                    $Output
+                    $Output | Add-Member -MemberType NoteProperty -Name Correct -Value "Error - WMI error"
+                    $objarray += $Output
                 }
             }
             else {
                 Write-Error -Message "Can't connect to server $computer" -Category ConnectionError -TargetObject $computer
                 $Output = New-Object -Type PSObject
                 $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
-                $Output | Add-Member -MemberType NoteProperty -Name Correct -Value "Error"
-                $Output
+                $Output | Add-Member -MemberType NoteProperty -Name Correct -Value "Error - Connection error"
+                $objarray += $Output
             }
         }
+        return $objarray
     }
 }
 
@@ -100,34 +111,45 @@ function Set-RemoteDNS {
     )
 
     PROCESS {
+        $objarray = @()
         foreach($Computer in $Hostnames){
             if(Test-Connection -ComputerName $computer -Count 1 -Quiet){
-                $Networks = Get-WmiObject Win32_NetworkAdapterConfiguration -ComputerName $Computer -EA Stop | ? {$_.IPEnabled}
+                try{
+                    $Networks = Get-WmiObject Win32_NetworkAdapterConfiguration -ComputerName $Computer -EA Stop | ? {$_.IPEnabled}
                 
-                foreach($Network in $Networks){
-                    try {
-                        $DNSServers = "$PrimaryDNS","$SecondaryDNS"
-                        $dump = $Network.SetDNSServerSearchOrder($DNSServers)
+                    foreach($Network in $Networks){
+                        try {
+                            $DNSServers = "$PrimaryDNS","$SecondaryDNS"
+                            $dump = $Network.SetDNSServerSearchOrder($DNSServers)
 
-                        $Output = New-Object -Type PSObject
-                        $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
-                        $Output | Add-Member -MemberType NoteProperty -Name Result -Value $true
+                            $Output = New-Object -Type PSObject
+                            $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                            $Output | Add-Member -MemberType NoteProperty -Name Result -Value "True"
+                        }
+                        catch {
+                            $Output = New-Object -Type PSObject
+                            $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                            $Output | Add-Member -MemberType NoteProperty -Name Result -Value "False - Setting error"
+                        }
+                        $objarray += $Output
                     }
-                    catch {
-                        $Output = New-Object -Type PSObject
-                        $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
-                        $Output | Add-Member -MemberType NoteProperty -Name Result -Value $false
-                    }
-                    $Output
+                }
+                catch{
+                    Write-Error -Message "WMI error connecting to $computer" -Category ConnectionError -TargetObject $computer
+                    $Output = New-Object -Type PSObject
+                    $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                    $Output | Add-Member -MemberType NoteProperty -Name Correct -Value "False - WMI Error"
+                    $objarray += $Output
                 }
             }
             else {
                 Write-Error -Message "Can't connect to server $computer" -Category ConnectionError -TargetObject $computer
                 $Output = New-Object -Type PSObject
                 $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
-                $Output | Add-Member -MemberType NoteProperty -Name Result -Value $false
-                $Output
+                $Output | Add-Member -MemberType NoteProperty -Name Result -Value "False - Connection error"
+                $objarray += $Output
             }
         }
+        return $objarray
     }
 }
