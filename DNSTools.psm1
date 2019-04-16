@@ -10,6 +10,8 @@ function Validate-DNS {
             The Primary DNS Server to check for
         .PARAMETER SecondaryDNS
             The secondary DNS Server to check for
+        .PARAMETER NicNumber
+            The index of the NIC you want to change. Defaults to changing all NICs.
         .EXAMPLE
             Validate-DNS -Hostnames "foobar" -PrimaryDNS 10.100.0.1 -SecondaryDNS 10.101.0.1
 
@@ -29,7 +31,10 @@ function Validate-DNS {
         [string]$PrimaryDNS,
 
         [Parameter(Mandatory=$True)]
-        [string]$SecondaryDNS
+        [string]$SecondaryDNS,
+
+        [Parameter(Mandatory=$False)]
+        [Int]$NicNumber = -1
     )
 
     PROCESS {
@@ -39,25 +44,53 @@ function Validate-DNS {
                 try{
                     $Networks = Get-WmiObject Win32_NetworkAdapterConfiguration -ComputerName $Computer -EA Stop | ? {$_.IPEnabled}
                 
-                    foreach($Network in $Networks){
-                        $DNSServers = $Network.DNSServerSearchOrder
-                        if($DNSServers[0] -eq $PrimaryDNS -and $DNSServers[1] -eq $SecondaryDNS){
-                            $valid = "True"
-                        }
-                        else{
-                            $valid = "False"
-                        }
+                    if($NicNumber -eq -1){
+                        foreach($Network in $Networks){
+                            $DNSServers = $Network.DNSServerSearchOrder
+                            if($DNSServers[0] -eq $PrimaryDNS -and $DNSServers[1] -eq $SecondaryDNS){
+                                $valid = "True"
+                            }
+                            else{
+                                $valid = "False"
+                            }
 
-                        $Output = New-Object -Type PSObject
-                        $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
-                        $Output | Add-Member -MemberType NoteProperty -Name PrimaryDNS -Value $DNSServers[0]
-                        $Output | Add-Member -MemberType NoteProperty -Name SecondaryDNS -Value $DNSServers[1]
-                        $Output | Add-Member -MemberType NoteProperty -Name Correct -Value $valid
-                        $objarray += $Output
+                            $Output = New-Object -Type PSObject
+                            $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                            $Output | Add-Member -MemberType NoteProperty -Name PrimaryDNS -Value $DNSServers[0]
+                            $Output | Add-Member -MemberType NoteProperty -Name SecondaryDNS -Value $DNSServers[1]
+                            $Output | Add-Member -MemberType NoteProperty -Name Correct -Value $valid
+                            $objarray += $Output
+                        }
+                    }
+                    else{
+                        try{
+                            $DNSServers = $Networks[$NicNumber].DNSServerSearchOrder
+                            if($DNSServers[0] -eq $PrimaryDNS -and $DNSServers[1] -eq $SecondaryDNS){
+                                $valid = "True"
+                            }
+                            else{
+                                $valid = "False"
+                            }
+                            $Output = New-Object -Type PSObject
+                            $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                            $Output | Add-Member -MemberType NoteProperty -Name PrimaryDNS -Value $DNSServers[0]
+                            $Output | Add-Member -MemberType NoteProperty -Name SecondaryDNS -Value $DNSServers[1]
+                            $Output | Add-Member -MemberType NoteProperty -Name Correct -Value $valid
+                            $objarray += $Output
+                        }
+                        catch{
+                            Write-Error -Message "Index out of bounds. Error message: $($_.Exception.Message)" -Category InvalidData -TargetObject $computer
+                            $Output = New-Object -Type PSObject
+                            $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                            $Output | Add-Member -MemberType NoteProperty -Name PrimaryDNS -Value $DNSServers[0]
+                            $Output | Add-Member -MemberType NoteProperty -Name SecondaryDNS -Value $DNSServers[1]
+                            $Output | Add-Member -MemberType NoteProperty -Name Correct -Value "Error - Index out of bounds"
+                            $objarray += $Output
+                        }
                     }
                 }
                 catch{
-                    Write-Error -Message "WMI error connecting to $computer" -Category ConnectionError -TargetObject $computer
+                    Write-Error -Message "WMI error connecting to $computer. $($_.Exception.Message)" -Category ConnectionError -TargetObject $computer
                     $Output = New-Object -Type PSObject
                     $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
                     $Output | Add-Member -MemberType NoteProperty -Name Correct -Value "Error - WMI error"
@@ -65,7 +98,7 @@ function Validate-DNS {
                 }
             }
             else {
-                Write-Error -Message "Can't connect to server $computer" -Category ConnectionError -TargetObject $computer
+                Write-Error -Message "Can't connect to server $computer. Error message: $($_.Exception.Message)" -Category ConnectionError -TargetObject $computer
                 $Output = New-Object -Type PSObject
                 $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
                 $Output | Add-Member -MemberType NoteProperty -Name Correct -Value "Error - Connection error"
@@ -88,6 +121,8 @@ function Set-RemoteDNS {
             The Primary DNS Server to set
         .PARAMETER SecondaryDNS
             The secondary DNS Server to set
+        .PARAMETER NicNumber
+            The index of the NIC you want to change. Defaults to changing all NICs.
         .EXAMPLE
             Set-RemoteDNS -Hostnames "foobar" -PrimaryDNS 10.100.0.1 -SecondaryDNS 10.101.0.1
 
@@ -107,7 +142,10 @@ function Set-RemoteDNS {
         [string]$PrimaryDNS,
 
         [Parameter(Mandatory=$True)]
-        [string]$SecondaryDNS
+        [string]$SecondaryDNS,
+
+        [Parameter(Mandatory=$False)]
+        [Int]$NicNumber = -1
     )
 
     PROCESS {
@@ -116,11 +154,27 @@ function Set-RemoteDNS {
             if(Test-Connection -ComputerName $computer -Count 1 -Quiet){
                 try{
                     $Networks = Get-WmiObject Win32_NetworkAdapterConfiguration -ComputerName $Computer -EA Stop | ? {$_.IPEnabled}
-                
-                    foreach($Network in $Networks){
+                    $DNSServers = "$PrimaryDNS","$SecondaryDNS"
+                    if($NicNumber -eq -1){
+                        foreach($Network in $Networks){
+                            try {
+                                $dump = $Network.SetDNSServerSearchOrder($DNSServers)
+
+                                $Output = New-Object -Type PSObject
+                                $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                                $Output | Add-Member -MemberType NoteProperty -Name Result -Value "True"
+                            }
+                            catch {
+                                $Output = New-Object -Type PSObject
+                                $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
+                                $Output | Add-Member -MemberType NoteProperty -Name Result -Value "False - Setting error"
+                            }
+                            $objarray += $Output
+                        }
+                    }
+                    else{
                         try {
-                            $DNSServers = "$PrimaryDNS","$SecondaryDNS"
-                            $dump = $Network.SetDNSServerSearchOrder($DNSServers)
+                            $dump = $Networks[$NicNumber].SetDNSServerSearchOrder($DNSServers)
 
                             $Output = New-Object -Type PSObject
                             $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
@@ -135,7 +189,7 @@ function Set-RemoteDNS {
                     }
                 }
                 catch{
-                    Write-Error -Message "WMI error connecting to $computer" -Category ConnectionError -TargetObject $computer
+                    Write-Error -Message "WMI error connecting to $computer. Error message: $($_.Exception.Message)" -Category ConnectionError -TargetObject $computer
                     $Output = New-Object -Type PSObject
                     $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
                     $Output | Add-Member -MemberType NoteProperty -Name Correct -Value "False - WMI Error"
@@ -143,7 +197,7 @@ function Set-RemoteDNS {
                 }
             }
             else {
-                Write-Error -Message "Can't connect to server $computer" -Category ConnectionError -TargetObject $computer
+                Write-Error -Message "Can't connect to server $computer. Error message: $($_.Exception.Message)" -Category ConnectionError -TargetObject $computer
                 $Output = New-Object -Type PSObject
                 $Output | Add-Member -MemberType NoteProperty -Name HostName -Value $Computer
                 $Output | Add-Member -MemberType NoteProperty -Name Result -Value "False - Connection error"
